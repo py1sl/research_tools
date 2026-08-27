@@ -1,8 +1,8 @@
-import pdf_data_processing
+from pdf_data_extract import process_papers_folder
 
 def main():
     folder_path = '/home/py1sl/papers/'  # Replace with your folder path
-    metadata = pdf_data_processing.process_papers_folder(folder_path)
+    metadata = process_papers_folder(folder_path)
     
     if metadata:
         print("Extracted Metadata:")
