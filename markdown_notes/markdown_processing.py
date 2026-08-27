@@ -1,9 +1,7 @@
 import os
 from pathlib import Path
 
-import parse_structure
-import extract_content
-import search as note_search
+from . import extract_content, parse_structure, search as note_search
 
 
 def read_note(note_path, query=None):

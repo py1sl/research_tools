@@ -1,6 +1,5 @@
 import os
-import extract_meta
-import reference_extraction
+from . import extract_meta, reference_extraction
 
 
 def pdf_extract_data(pdf_path):

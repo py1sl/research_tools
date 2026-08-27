@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "research-tools"
+version = "0.1.0"
+description = "Research helper tools for markdown notes and PDF metadata extraction."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PyPDF2>=3.0.1",
+    "python-frontmatter>=1.3.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["markdown_notes", "pdf_data_extract"]

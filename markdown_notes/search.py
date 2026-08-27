@@ -2,8 +2,7 @@ import os
 import re
 from pathlib import Path
 
-import parse_structure
-import extract_content
+from . import extract_content, parse_structure
 
 
 def _iter_markdown_files(folder_path):
