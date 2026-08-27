@@ -34,7 +34,9 @@ def read_note(note_path, query=None):
             - ``sections`` (dict[str, str]): Mapping of heading → section body.
               Filtered by *query* relevance when *query* is provided; if
               no section scores above zero every section is returned.
-            - ``wikilinks`` (list[str]): Targets of ``[[wikilink]]`` references.
+            - ``internal_links`` (list[dict]): Standard markdown links to other
+              ``.md`` files.  Each dict has ``"display"`` (link text) and
+              ``"target"`` (path as written) keys.
             - ``external_links`` (list[str]): HTTP/HTTPS URLs found in the note.
             - ``code_blocks`` (list[dict]): Each dict has ``"language"`` and
               ``"content"`` keys.
@@ -94,7 +96,7 @@ def read_note(note_path, query=None):
         "summary": extract_content.extract_summary(body),
         "section_headings": [h['text'] for h in parse_structure.extract_headings(body)],
         "sections": sections,
-        "wikilinks": parse_structure.extract_wikilinks(body),
+        "internal_links": parse_structure.extract_internal_links(body),
         "external_links": extract_content.extract_external_links(body),
         "code_blocks": extract_content.extract_code_blocks(body),
         "tables": extract_content.extract_tables(body),
@@ -139,17 +141,18 @@ def search_notes(folder_path, query=None, tags=None, heading=None):
 
 def get_note_graph(folder_path):
     """
-    Build a wikilink adjacency graph for all notes in a folder.
+    Build a link adjacency graph for all notes in a folder.
 
     Use this to understand how notes are connected without reading every file
-    in full.  To find notes that link *to* a specific note, scan the values
-    for that note's title.
+    in full.  The graph is keyed by note title and lists the raw link targets
+    (paths) of standard markdown links to other ``.md`` files.  To find notes
+    that link *to* a specific note, scan the values for that note's filename.
 
     Args:
         folder_path (str): Path to the root folder (searched recursively).
 
     Returns:
-        dict[str, list[str]]: ``{note_title: [linked_note_titles]}``.
+        dict[str, list[str]]: ``{note_title: [link_targets]}``.
 
     Raises:
         FileNotFoundError: If *folder_path* does not exist.

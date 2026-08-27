@@ -30,7 +30,7 @@ Read a single `.md` file and return a rich structured dict:
   "summary": str | None,
   "section_headings": list[str],
   "sections": dict[str, str],   # filtered by query when query is given
-  "wikilinks": list[str],
+  "internal_links": list[dict], # {"display": str, "target": str} — standard [text](path.md) links
   "external_links": list[str],
   "code_blocks": list[dict],    # {"language": str, "content": str}
   "tables": list[list[list]],
@@ -45,8 +45,9 @@ lightweight match dicts useful for narrowing down which notes to read in full.
 
 ### `get_note_graph(folder_path)`
 
-Returns a wikilink adjacency dict `{note_title: [linked_note_titles]}` for the
-entire vault — useful for understanding note relationships.
+Returns a link adjacency dict `{note_title: [link_targets]}` for the entire
+vault, based on standard markdown links to other `.md` files — useful for
+understanding note relationships.
 
 ## Dependencies
 

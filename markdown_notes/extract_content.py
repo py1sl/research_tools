@@ -19,8 +19,6 @@ def extract_plain_text(text):
     text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
     # Remove links but keep display text
     text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
-    # Remove wikilinks but keep display text / target
-    text = re.sub(r'\[\[([^\]|]+)(?:\|([^\]]+))?\]\]', lambda m: m.group(2) or m.group(1), text)
     # Remove bold/italic markers
     text = re.sub(r'(\*{1,3}|_{1,3})(.*?)\1', r'\2', text)
     # Remove heading markers

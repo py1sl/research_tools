@@ -140,19 +140,19 @@ def search_notes(folder_path, query=None, tags=None, heading=None):
 
 def get_note_graph(folder_path):
     """
-    Build a wikilink adjacency graph for all notes in a folder.
+    Build a link adjacency graph for all notes in a folder.
 
     Each note is represented by its title (H1 heading or filename stem).
-    The graph maps each note title to the list of note titles it links to
-    via [[wikilinks]].
+    The graph maps each note title to the list of link targets (as written
+    in the note) that point to other ``.md`` files via standard markdown
+    links (e.g. ``[text](other_note.md)``).
 
     Args:
         folder_path (str): Path to the root folder containing .md files.
 
     Returns:
-        dict[str, list[str]]: Adjacency dict {note_title: [linked_titles]}.
-            Linked titles are as written in the wikilink; they may not
-            correspond to an existing note.
+        dict[str, list[str]]: Adjacency dict {note_title: [link_targets]}.
+            Link targets are the raw path strings from the markdown source.
 
     Raises:
         FileNotFoundError: If folder_path does not exist.
@@ -172,7 +172,7 @@ def get_note_graph(folder_path):
             None
         )
         title = first_h1 or metadata.get('title') or Path(filepath).stem
-        links = parse_structure.extract_wikilinks(body)
+        links = [lnk['target'] for lnk in parse_structure.extract_internal_links(body)]
         graph[title] = links
 
     return graph

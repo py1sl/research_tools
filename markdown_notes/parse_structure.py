@@ -78,28 +78,45 @@ def split_by_headings(text):
     return sections
 
 
-def extract_wikilinks(text):
+def extract_internal_links(text):
     """
-    Extract Obsidian-style wikilink targets from markdown text.
+    Extract internal note links from markdown text.
 
-    Handles [[Target]], [[Target|Alias]], and [[Target#Heading]] forms,
-    returning only the base note name (before | or #).
+    An internal link is a standard markdown link whose target is a relative
+    path ending in ``.md`` (e.g. ``[Methods](methods.md)`` or
+    ``[See also](../other/note.md)``).  Absolute URLs (``http://…``) and
+    image links are ignored.
 
     Args:
         text (str): Markdown text.
 
     Returns:
-        list[str]: Unique list of linked note names.
+        list[dict]: Unique list of dicts with keys:
+            - ``"display"`` (str): The link display text.
+            - ``"target"`` (str): The raw link target as written in the note.
     """
-    raw = re.findall(r'\[\[([^\]]+)\]\]', text)
-    targets = []
+    pattern = re.compile(r'!\[.*?\]\([^\)]*\)|'   # consume image links first
+                         r'\[([^\]]+)\]\(([^\)]+)\)')
+    links = []
     seen = set()
-    for link in raw:
-        base = re.split(r'[|#]', link)[0].strip()
-        if base and base not in seen:
-            seen.add(base)
-            targets.append(base)
-    return targets
+    for match in pattern.finditer(text):
+        display = match.group(1)
+        target = match.group(2)
+        # Skip image links (group 1 is None) and external/anchor-only links
+        if display is None:
+            continue
+        target = target.strip()
+        if target.startswith(('http://', 'https://', '#', 'mailto:')):
+            continue
+        # Keep only links that point at markdown files
+        path_part = target.split('#')[0]  # strip in-page anchor
+        if not path_part.endswith('.md'):
+            continue
+        key = (display, target)
+        if key not in seen:
+            seen.add(key)
+            links.append({"display": display, "target": target})
+    return links
 
 
 def extract_inline_tags(text):
