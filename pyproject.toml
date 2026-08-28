@@ -13,5 +13,11 @@ dependencies = [
     "python-frontmatter>=1.3.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [tool.setuptools.packages.find]
 include = ["markdown_notes", "pdf_data_extract"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
