@@ -5,6 +5,21 @@ Possibly a set of tools to help with research focused agents
 
 Currently just starting to think about it and start some basics.
 
+## Installation
+
+This project requires Python 3.12 or later. From a cloned copy of the
+repository, install the package with:
+
+```bash
+python -m pip install .
+```
+
+To install the development dependencies, use:
+
+```bash
+python -m pip install ".[dev]"
+```
+
 ## PDF extract
 Currently just does some meta data extraction
 
@@ -17,4 +32,3 @@ Currently just does some meta data extraction
 
 ## structure
 Each tool is in its own folder.
-
