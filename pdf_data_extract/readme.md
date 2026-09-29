@@ -10,3 +10,11 @@ This repository provides a set of tools designed for extracting data from PDF do
 
 All code is implemented in Python 3.12.
 
+## Reference extraction
+
+`extract_references(pdf_path)` returns a list of dictionaries from a PDF's
+References, Bibliography, Works Cited, or Literature Cited section. Each
+dictionary contains the normalized citation as `text` and the detected DOI as
+`doi` (`None` when no DOI is present). Numbered citations and blank-line
+separated citations are supported; PDFs without a recognized section return an
+empty list.
