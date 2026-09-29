@@ -58,10 +58,16 @@ def _is_numbered_heading(text):
 
 
 def _is_heading_line(line):
+    numbered_match = _NUMBERED_SECTION_HEADING.match(line)
     return bool(
         _NAMED_SECTION_HEADING.match(line)
         or _FIGURE_CAPTION.match(line)
         or _TABLE_CAPTION.match(line)
+        or (
+            numbered_match
+            and _is_numbered_heading(numbered_match.group(2))
+            and not (_FIGURE_CAPTION.match(line) or _TABLE_CAPTION.match(line))
+        )
     )
 
 

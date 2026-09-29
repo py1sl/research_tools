@@ -125,6 +125,20 @@ class TestExtractFigureCaptions:
             {"number": "1", "caption": "A caption without terminal punctuation"}
         ]
 
+    def test_stops_caption_before_numbered_section_heading(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        _fake_reader(
+            monkeypatch,
+            "Figure 1: Caption without a final period\n"
+            "2.3 A New Section\n"
+            "Section text.",
+        )
+
+        assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "Caption without a final period"}
+        ]
+
     def test_raises_for_missing_pdf(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             structure_extraction.extract_figure_captions(str(tmp_path / "missing.pdf"))
