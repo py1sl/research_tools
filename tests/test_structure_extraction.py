@@ -110,6 +110,21 @@ class TestExtractFigureCaptions:
             {"number": "1", "caption": "Caption text on the first line and a wrapped continuation."}
         ]
 
+    def test_does_not_continue_caption_across_pages(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        monkeypatch.setattr(
+            structure_extraction,
+            "PdfReader",
+            lambda path: FakeReader(
+                ["Figure 1: A caption without terminal punctuation", "Unrelated page text."]
+            ),
+        )
+
+        assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "A caption without terminal punctuation"}
+        ]
+
     def test_raises_for_missing_pdf(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             structure_extraction.extract_figure_captions(str(tmp_path / "missing.pdf"))
