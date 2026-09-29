@@ -63,6 +63,21 @@ class TestExtractSectionHeadings:
             {"number": None, "heading": "References"},
         ]
 
+    def test_ignores_numbered_prose(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        _fake_reader(
+            monkeypatch,
+            "1. Introduction\n"
+            "1. This is a numbered sentence, not a section heading.\n"
+            "2. This numbered paragraph contains enough words to be ordinary prose "
+            "rather than a concise section title.\n",
+        )
+
+        assert structure_extraction.extract_section_headings(str(pdf_file)) == [
+            {"number": "1", "heading": "Introduction"}
+        ]
+
     def test_raises_for_missing_pdf(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             structure_extraction.extract_section_headings(str(tmp_path / "missing.pdf"))
@@ -79,6 +94,49 @@ class TestExtractFigureCaptions:
         assert captions == [
             {"number": "1", "caption": "An example diagram showing the architecture."},
             {"number": "2", "caption": "Another figure caption"},
+        ]
+
+    def test_stops_caption_at_sentence_end(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        _fake_reader(
+            monkeypatch,
+            "Figure 1: Caption text on the first line\n"
+            "and a wrapped continuation.\n"
+            "This is the following body paragraph and should not be included.\n",
+        )
+
+        assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "Caption text on the first line and a wrapped continuation."}
+        ]
+
+    def test_does_not_continue_caption_across_pages(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        monkeypatch.setattr(
+            structure_extraction,
+            "PdfReader",
+            lambda path: FakeReader(
+                ["Figure 1: A caption without terminal punctuation", "Unrelated page text."]
+            ),
+        )
+
+        assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "A caption without terminal punctuation"}
+        ]
+
+    def test_stops_caption_before_numbered_section_heading(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        _fake_reader(
+            monkeypatch,
+            "Figure 1: Caption without a final period\n"
+            "2.3 A New Section\n"
+            "Section text.",
+        )
+
+        assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "Caption without a final period"}
         ]
 
     def test_raises_for_missing_pdf(self, tmp_path):

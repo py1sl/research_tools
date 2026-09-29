@@ -14,6 +14,8 @@ _COMMON_SECTION_NAMES = (
 _NUMBERED_SECTION_HEADING = re.compile(
     r"^\s*(\d+(?:\.\d+)*)[.)]?\s+([A-Za-z][^\n]{0,120}?)\s*$"
 )
+_CAPTION_SENTENCE_END = re.compile(r'[.!?]["\')\]]?$')
+_ABBREVIATIONS = {"dr", "e.g", "eq", "etc", "fig", "i.e", "no", "vs"}
 _NAMED_SECTION_HEADING = re.compile(
     rf"^\s*(?:(\d+(?:\.\d+)*)[.)]?\s+)?({_COMMON_SECTION_NAMES})\s*:?\s*$",
     re.IGNORECASE,
@@ -30,14 +32,42 @@ _TABLE_CAPTION = re.compile(
 
 def _get_pdf_text(pdf_path):
     reader = PdfReader(pdf_path)
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def _ends_sentence(line):
+    line = line.strip()
+    if not _CAPTION_SENTENCE_END.search(line):
+        return False
+
+    if line.endswith("."):
+        final_word = line.rsplit(None, 1)[-1][:-1].lower()
+        if final_word in _ABBREVIATIONS:
+            return False
+    return True
+
+
+def _is_numbered_heading(text):
+    text = text.strip()
+    return (
+        len(text.split()) <= 12
+        and len(text) <= 100
+        and text[0].isupper()
+        and not _ends_sentence(text)
+    )
 
 
 def _is_heading_line(line):
+    numbered_match = _NUMBERED_SECTION_HEADING.match(line)
     return bool(
         _NAMED_SECTION_HEADING.match(line)
         or _FIGURE_CAPTION.match(line)
         or _TABLE_CAPTION.match(line)
+        or (
+            numbered_match
+            and _is_numbered_heading(numbered_match.group(2))
+            and not (_FIGURE_CAPTION.match(line) or _TABLE_CAPTION.match(line))
+        )
     )
 
 
@@ -56,6 +86,9 @@ def _extract_captions(lines, pattern, number_key, text_key):
         if match:
             save_current()
             current = {"number": match.group(1), "parts": [match.group(2).strip()]}
+            if _ends_sentence(match.group(2)):
+                save_current()
+                current = None
             continue
 
         if current is not None:
@@ -64,6 +97,9 @@ def _extract_captions(lines, pattern, number_key, text_key):
                 current = None
             else:
                 current["parts"].append(stripped)
+                if _ends_sentence(stripped):
+                    save_current()
+                    current = None
 
     save_current()
     return captions
@@ -81,8 +117,10 @@ def _section_headings_from_lines(lines):
             continue
 
         numbered_match = _NUMBERED_SECTION_HEADING.match(line)
-        if numbered_match and not (
-            _FIGURE_CAPTION.match(line) or _TABLE_CAPTION.match(line)
+        if (
+            numbered_match
+            and _is_numbered_heading(numbered_match.group(2))
+            and not (_FIGURE_CAPTION.match(line) or _TABLE_CAPTION.match(line))
         ):
             headings.append(
                 {
