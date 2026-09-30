@@ -9,7 +9,20 @@ This repository provides a set of tools designed for extracting data from PDF do
 - **`reference_extraction`**: Targets extraction of reference sections from academic papers.
 - **`structure_extraction`**: Extracts section headings, figure captions, and table captions.
 
-All code is implemented in Python 3.12.
+All code is implemented in Python 3.12. All PDF parsing across `extract_meta`,
+`reference_extraction`, and `structure_extraction` is backed by a single
+library, [PyMuPDF](https://pymupdf.readthedocs.io/) (`pymupdf`); `PyPDF2` is
+no longer a dependency of this package.
+
+## Metadata extraction
+
+`extract_metadata(pdf_path)` returns a dictionary of the PDF's document-info
+metadata (`Title`, `Author`, `Subject`, `Creator`, `Producer`, `CreationDate`,
+`ModDate`, `Keywords`, `Trapped`, `NumberOfPages`). `Author` is split into a
+list of individual names, and `CreationDate`/`ModDate` are normalized from the
+PDF's raw date format to `YYYY-MM-DD HH:MM:SS`. Missing fields are returned as
+`None` (or an empty list for `Author`); errors reading the file are logged and
+an empty/`None`-filled dictionary is returned rather than raised.
 
 ## Reference extraction
 

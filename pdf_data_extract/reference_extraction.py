@@ -1,6 +1,6 @@
 import re
 
-from PyPDF2 import PdfReader
+import pymupdf
 
 
 _REFERENCE_HEADING = re.compile(
@@ -79,6 +79,14 @@ def extract_references(pdf_path):
     detected ``doi`` (or ``None`` when the citation does not include one).
     Numbered references and references separated by blank lines are supported.
     """
-    reader = PdfReader(pdf_path)
-    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    try:
+        document = pymupdf.open(pdf_path)
+    except pymupdf.FileNotFoundError as error:
+        raise FileNotFoundError(str(error)) from error
+
+    try:
+        text = "\n".join(page.get_text("text") for page in document)
+    finally:
+        document.close()
+
     return _extract_reference_section(text)
