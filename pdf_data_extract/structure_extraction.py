@@ -58,7 +58,7 @@ _BOLD_HEADING_MIN_RATIO = 0.95
 
 
 def _span_is_bold(span):
-    return bool(span.get("flags", 0) & _BOLD_FLAG) or "bold" in span.get("font", "").lower()
+    return bool(span.get("flags", 0) & _BOLD_FLAG) or "bold" in (span.get("font") or "").lower()
 
 
 def _page_lines(page):

@@ -114,7 +114,7 @@ def extract_tables_with_captions(pdf_path):
         document.close()
 
     matched = len(tables) == len(captions)
-    if not matched and tables:
+    if not matched:
         logger.warning(
             "Detected %d table(s) but %d table caption(s) in %s; "
             "leaving captions unmatched to avoid an incorrect pairing.",

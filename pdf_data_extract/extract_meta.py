@@ -70,7 +70,8 @@ def extract_metadata(pdf_path):
             metadata['CreationDate'] = info.get('creationDate') or None
             metadata['ModDate'] = info.get('modDate') or None
             metadata['Keywords'] = info.get('keywords') or None
-            metadata['Trapped'] = info.get('trapped') or None
+            trapped = info.get('trapped')
+            metadata['Trapped'] = trapped if trapped not in (None, '') else None
             metadata['NumberOfPages'] = document.page_count
     except Exception as e:
         logger.warning("Error extracting metadata from %s: %s", pdf_path, e)
