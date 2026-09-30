@@ -44,8 +44,10 @@ _TABLE_CAPTION = re.compile(
     re.IGNORECASE,
 )
 
-# PyMuPDF span "flags" is a bitfield; bit 4 (value 16) marks a bold font.
-# See https://pymupdf.readthedocs.io/en/latest/textpage.html for the layout.
+# PyMuPDF span "flags" is a bitfield; ``pymupdf.TEXT_FONT_BOLD`` (bit 4,
+# value 16) marks a bold font. We reference the numeric value directly
+# (rather than the ``pymupdf.TEXT_FONT_BOLD`` constant) so this module's
+# fake/mocked ``pymupdf`` module in tests doesn't need to replicate it.
 _BOLD_FLAG = 1 << 4
 # A line's font size must be at least this much larger than the document's
 # modal body size to be treated as a heading by font size alone.
@@ -76,22 +78,28 @@ def _page_lines(page):
     return lines
 
 
+def _lines_from_document(document):
+    """Return a flat list of line dicts for an already-open PyMuPDF
+    document, with a blank separator line between pages so caption/heading
+    boundary logic still treats page breaks as breaks."""
+    lines = []
+    for index, page in enumerate(document):
+        if index:
+            lines.append({"text": "", "size": 0, "bold": False})
+        lines.extend(_page_lines(page))
+    return lines
+
+
 def _get_document_lines(pdf_path):
-    """Return a flat list of line dicts for the whole document, with a
-    blank separator line between pages so caption/heading boundary logic
-    still treats page breaks as breaks."""
+    """Return a flat list of line dicts for the whole document at
+    ``pdf_path``, opening and closing it."""
     try:
         document = pymupdf.open(pdf_path)
     except pymupdf.FileNotFoundError as error:
         raise FileNotFoundError(str(error)) from error
 
     try:
-        lines = []
-        for index, page in enumerate(document):
-            if index:
-                lines.append({"text": "", "size": 0, "bold": False})
-            lines.extend(_page_lines(page))
-        return lines
+        return _lines_from_document(document)
     finally:
         document.close()
 
@@ -155,10 +163,9 @@ def _is_heading_line(line, body_size):
     )
 
 
-def _extract_captions(lines, pattern, number_key, text_key, strict=False):
+def _extract_captions(lines, pattern, number_key, text_key, body_size, strict=False):
     captions = []
     current = None
-    body_size = _body_font_size(lines)
 
     def save_current():
         if current is not None:
@@ -209,24 +216,30 @@ def _numbers_are_sequential(captions, number_key):
     return True
 
 
-def _extract_validated_captions(lines, pattern, number_key, text_key):
-    captions = _extract_captions(lines, pattern, number_key, text_key)
+def _extract_validated_captions(lines, pattern, number_key, text_key, body_size):
+    captions = _extract_captions(lines, pattern, number_key, text_key, body_size)
     if _numbers_are_sequential(captions, number_key):
         return captions
-    return _extract_captions(lines, pattern, number_key, text_key, strict=True)
+    return _extract_captions(lines, pattern, number_key, text_key, body_size, strict=True)
 
 
-def _section_headings_from_lines(lines):
+def _section_headings_from_lines(lines, body_size):
     headings = []
-    seen = set()
-    body_size = _body_font_size(lines)
+    seen_layout_headings = set()
 
     def add(number, heading_text):
         heading_text = heading_text.strip()
-        key = heading_text.lower()
-        if key in seen:
-            return
-        seen.add(key)
+        if number is None:
+            # Layout-fallback headings (e.g. a running title/footer
+            # repeated on every page) are deduplicated by text alone,
+            # since they have no number to disambiguate them. Numbered or
+            # named headings are never deduplicated this way, so distinct
+            # sections that happen to share a title (e.g. "2.1 Overview"
+            # and "3.1 Overview") are both kept.
+            key = heading_text.lower()
+            if key in seen_layout_headings:
+                return
+            seen_layout_headings.add(key)
         headings.append({"number": number, "heading": heading_text})
 
     for line in lines:
@@ -270,7 +283,7 @@ def extract_section_headings(pdf_path):
         in the order they appear in the document.
     """
     lines = _get_document_lines(pdf_path)
-    return _section_headings_from_lines(lines)
+    return _section_headings_from_lines(lines, _body_font_size(lines))
 
 
 def extract_figure_captions(pdf_path):
@@ -284,7 +297,9 @@ def extract_figure_captions(pdf_path):
         and its ``caption`` text, in the order they appear in the document.
     """
     lines = _get_document_lines(pdf_path)
-    return _extract_validated_captions(lines, _FIGURE_CAPTION, "number", "caption")
+    return _extract_validated_captions(
+        lines, _FIGURE_CAPTION, "number", "caption", _body_font_size(lines)
+    )
 
 
 def extract_table_captions(pdf_path):
@@ -298,7 +313,19 @@ def extract_table_captions(pdf_path):
         and its ``caption`` text, in the order they appear in the document.
     """
     lines = _get_document_lines(pdf_path)
-    return _extract_validated_captions(lines, _TABLE_CAPTION, "number", "caption")
+    return _extract_validated_captions(
+        lines, _TABLE_CAPTION, "number", "caption", _body_font_size(lines)
+    )
+
+
+def _table_captions_from_document(document):
+    """Like :func:`extract_table_captions`, but for an already-open
+    PyMuPDF document. Used by ``table_extraction`` so that pairing tables
+    with captions only has to parse the PDF once."""
+    lines = _lines_from_document(document)
+    return _extract_validated_captions(
+        lines, _TABLE_CAPTION, "number", "caption", _body_font_size(lines)
+    )
 
 
 def extract_document_structure(pdf_path):
@@ -313,13 +340,14 @@ def extract_document_structure(pdf_path):
         ``figure_captions``, and ``table_captions``.
     """
     lines = _get_document_lines(pdf_path)
+    body_size = _body_font_size(lines)
 
     return {
-        "section_headings": _section_headings_from_lines(lines),
+        "section_headings": _section_headings_from_lines(lines, body_size),
         "figure_captions": _extract_validated_captions(
-            lines, _FIGURE_CAPTION, "number", "caption"
+            lines, _FIGURE_CAPTION, "number", "caption", body_size
         ),
         "table_captions": _extract_validated_captions(
-            lines, _TABLE_CAPTION, "number", "caption"
+            lines, _TABLE_CAPTION, "number", "caption", body_size
         ),
     }

@@ -9,6 +9,7 @@ from .structure_extraction import (
     extract_section_headings,
     extract_table_captions,
 )
+from .table_extraction import extract_tables, extract_tables_with_captions
 
 __all__ = [
     "pdf_extract_data",
@@ -18,4 +19,6 @@ __all__ = [
     "extract_figure_captions",
     "extract_section_headings",
     "extract_table_captions",
+    "extract_tables",
+    "extract_tables_with_captions",
 ]

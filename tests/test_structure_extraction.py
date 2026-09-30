@@ -91,6 +91,32 @@ SAMPLE_TEXT = (
 )
 
 
+class TestBodyFontSize:
+    def test_weights_by_total_character_count_not_line_count(self):
+        """The modal body size is weighted by character count, so a
+        majority of *characters* at one size should win even if a
+        different size has more (but shorter) lines -- e.g. many short
+        repeated footer/page-number lines shouldn't outweigh the actual
+        body paragraphs just because there are more of them."""
+        lines = (
+            # Two long paragraphs at size 12: ~95 characters each.
+            [
+                {"text": "x" * 95, "size": 12.0, "bold": False}
+                for _ in range(2)
+            ]
+            # Five short lines at size 9: 3 characters each (15 total).
+            + [
+                {"text": "abc", "size": 9.0, "bold": False}
+                for _ in range(5)
+            ]
+        )
+
+        assert structure_extraction._body_font_size(lines) == 12.0
+
+    def test_returns_zero_for_no_lines(self):
+        assert structure_extraction._body_font_size([]) == 0
+
+
 class TestExtractSectionHeadings:
     def test_extracts_numbered_and_named_headings(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"

@@ -1,7 +1,10 @@
+import logging
 import re
 from datetime import datetime, timedelta
 
 import pymupdf
+
+logger = logging.getLogger(__name__)
 
 
 def process_authors(authors):
@@ -48,7 +51,7 @@ def process_date(date_str):
                 formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M:%S')
                 return formatted_date
         except ValueError:
-            print(f"Date parsing error for {date_str}")
+            logger.warning("Date parsing error for %s", date_str)
     return None
 
 
@@ -70,7 +73,7 @@ def extract_metadata(pdf_path):
             metadata['Trapped'] = info.get('trapped') or None
             metadata['NumberOfPages'] = document.page_count
     except Exception as e:
-        print(f"Error extracting metadata from {pdf_path}: {e}")
+        logger.warning("Error extracting metadata from %s: %s", pdf_path, e)
 
     metadata['Author'] = process_authors(metadata.get('Author'))
     metadata['CreationDate'] = process_date(metadata.get('CreationDate'))

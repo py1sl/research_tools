@@ -8,11 +8,12 @@ This repository provides a set of tools designed for extracting data from PDF do
 - **`pdf_data_processing`**: Serves as the main controller and entry point for processing PDF data.
 - **`reference_extraction`**: Targets extraction of reference sections from academic papers.
 - **`structure_extraction`**: Extracts section headings, figure captions, and table captions.
+- **`table_extraction`**: Extracts table contents as `pandas` DataFrames.
 
 All code is implemented in Python 3.12. All PDF parsing across `extract_meta`,
-`reference_extraction`, and `structure_extraction` is backed by a single
-library, [PyMuPDF](https://pymupdf.readthedocs.io/) (`pymupdf`); `PyPDF2` is
-no longer a dependency of this package.
+`reference_extraction`, `structure_extraction`, and `table_extraction` is
+backed by a single library, [PyMuPDF](https://pymupdf.readthedocs.io/)
+(`pymupdf`); `PyPDF2` is no longer a dependency of this package.
 
 ## Metadata extraction
 
@@ -81,3 +82,27 @@ dependency-light middle ground that still meaningfully improves on plain-text
 regex matching by exploiting real layout signals. If extraction accuracy
 remains insufficient, GROBID is worth revisiting as a heavier, more accurate
 alternative.
+
+## Table extraction
+
+`table_extraction` extracts the actual contents of tables (rows and
+columns of cell values), as opposed to `structure_extraction`'s
+`extract_table_captions`, which only extracts the caption text (e.g.
+"Table 1: ..."). Tables are located using PyMuPDF's built-in table detector,
+which analyses each page's ruling lines and text alignment, rather than
+regex heuristics on extracted text.
+
+- `extract_tables(pdf_path)` returns a list of dictionaries, one per
+  detected table in document order. Each dictionary has a `page` (1-indexed
+  page number), an `index` (0-indexed position of the table within its
+  page), a `bbox` (`(x0, y0, x1, y1)` bounding box in PDF points), and a
+  `dataframe` (a `pandas.DataFrame` of the table's rows/columns, with the
+  detected header row used as column names where available). PDFs with no
+  detectable tables return an empty list.
+- `extract_tables_with_captions(pdf_path)` returns the same list as
+  `extract_tables`, with each dictionary additionally paired with its
+  `number` and `caption` from `extract_table_captions`, matched by document
+  order, plus a `matched` boolean. If the number of detected tables doesn't
+  match the number of detected captions, pairing is ambiguous: a warning is
+  logged, `matched` is `False`, and `number`/`caption` are left as `None`
+  for every table rather than risking an incorrect pairing.
