@@ -2,18 +2,71 @@ import pytest
 
 from pdf_data_extract import structure_extraction
 
+DEFAULT_SIZE = 10.0
+
 
 class FakePage:
-    def __init__(self, text):
-        self.text = text
+    def __init__(self, lines):
+        # lines: list of (text, size, bold) tuples
+        self._lines = lines
 
-    def extract_text(self):
-        return self.text
+    def get_text(self, kind="dict"):
+        blocks = []
+        for text, size, bold in self._lines:
+            flags = 16 if bold else 0
+            blocks.append(
+                {
+                    "lines": [
+                        {
+                            "spans": [
+                                {
+                                    "text": text,
+                                    "size": size,
+                                    "flags": flags,
+                                    "font": "Bold" if bold else "Regular",
+                                }
+                            ]
+                        }
+                    ]
+                }
+            )
+        return {"blocks": blocks}
 
 
-class FakeReader:
+class FakeDocument:
     def __init__(self, pages):
-        self.pages = [FakePage(text) for text in pages]
+        self._pages = pages
+
+    def __iter__(self):
+        return iter(self._pages)
+
+    def close(self):
+        pass
+
+
+class FakePyMuPDFModule:
+    """Stand-in for the ``pymupdf`` module used by structure_extraction."""
+
+    FileNotFoundError = RuntimeError
+
+    def __init__(self, pages):
+        self._pages = pages
+
+    def open(self, path):
+        return FakeDocument(self._pages)
+
+
+def _page_from_text(text, size=DEFAULT_SIZE, bold=False):
+    return FakePage([(line, size, bold) for line in text.split("\n")])
+
+
+def _fake_document(monkeypatch, pages_text, *, size=DEFAULT_SIZE, bold=False):
+    """Patch ``pymupdf`` so each string in ``pages_text`` becomes a page,
+    with every line rendered at a uniform font size/weight (so the new
+    layout-based heading detection stays inert and only the regex
+    heuristics are exercised, matching the previous plain-text behaviour)."""
+    pages = [_page_from_text(text, size=size, bold=bold) for text in pages_text]
+    monkeypatch.setattr(structure_extraction, "pymupdf", FakePyMuPDFModule(pages))
 
 
 SAMPLE_TEXT = (
@@ -38,19 +91,11 @@ SAMPLE_TEXT = (
 )
 
 
-def _fake_reader(monkeypatch, text):
-    monkeypatch.setattr(
-        structure_extraction,
-        "PdfReader",
-        lambda path: FakeReader([text]),
-    )
-
-
 class TestExtractSectionHeadings:
     def test_extracts_numbered_and_named_headings(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(monkeypatch, SAMPLE_TEXT)
+        _fake_document(monkeypatch, [SAMPLE_TEXT])
 
         headings = structure_extraction.extract_section_headings(str(pdf_file))
 
@@ -66,12 +111,14 @@ class TestExtractSectionHeadings:
     def test_ignores_numbered_prose(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(
+        _fake_document(
             monkeypatch,
-            "1. Introduction\n"
-            "1. This is a numbered sentence, not a section heading.\n"
-            "2. This numbered paragraph contains enough words to be ordinary prose "
-            "rather than a concise section title.\n",
+            [
+                "1. Introduction\n"
+                "1. This is a numbered sentence, not a section heading.\n"
+                "2. This numbered paragraph contains enough words to be ordinary prose "
+                "rather than a concise section title.\n"
+            ],
         )
 
         assert structure_extraction.extract_section_headings(str(pdf_file)) == [
@@ -82,12 +129,51 @@ class TestExtractSectionHeadings:
         with pytest.raises(FileNotFoundError):
             structure_extraction.extract_section_headings(str(tmp_path / "missing.pdf"))
 
+    def test_finds_unlisted_heading_by_font_size(self, tmp_path, monkeypatch):
+        """A section name outside the hard-coded whitelist (e.g. a
+        non-standard or non-English name) is still detected when it is
+        visually distinguished by a larger font size."""
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        page = FakePage(
+            [
+                ("Zusammenfassung", 16.0, False),
+                ("Body text at the normal document font size.", 10.0, False),
+                ("Body text at the normal document font size.", 10.0, False),
+            ]
+        )
+        monkeypatch.setattr(
+            structure_extraction, "pymupdf", FakePyMuPDFModule([page])
+        )
+
+        assert structure_extraction.extract_section_headings(str(pdf_file)) == [
+            {"number": None, "heading": "Zusammenfassung"}
+        ]
+
+    def test_finds_unlisted_heading_by_bold_text(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        page = FakePage(
+            [
+                ("Ethical Statement", 10.0, True),
+                ("Body text at the normal document font size.", 10.0, False),
+                ("Body text at the normal document font size.", 10.0, False),
+            ]
+        )
+        monkeypatch.setattr(
+            structure_extraction, "pymupdf", FakePyMuPDFModule([page])
+        )
+
+        assert structure_extraction.extract_section_headings(str(pdf_file)) == [
+            {"number": None, "heading": "Ethical Statement"}
+        ]
+
 
 class TestExtractFigureCaptions:
     def test_extracts_multiline_figure_captions(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(monkeypatch, SAMPLE_TEXT)
+        _fake_document(monkeypatch, [SAMPLE_TEXT])
 
         captions = structure_extraction.extract_figure_captions(str(pdf_file))
 
@@ -99,11 +185,13 @@ class TestExtractFigureCaptions:
     def test_stops_caption_at_sentence_end(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(
+        _fake_document(
             monkeypatch,
-            "Figure 1: Caption text on the first line\n"
-            "and a wrapped continuation.\n"
-            "This is the following body paragraph and should not be included.\n",
+            [
+                "Figure 1: Caption text on the first line\n"
+                "and a wrapped continuation.\n"
+                "This is the following body paragraph and should not be included.\n"
+            ],
         )
 
         assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
@@ -113,12 +201,9 @@ class TestExtractFigureCaptions:
     def test_does_not_continue_caption_across_pages(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        monkeypatch.setattr(
-            structure_extraction,
-            "PdfReader",
-            lambda path: FakeReader(
-                ["Figure 1: A caption without terminal punctuation", "Unrelated page text."]
-            ),
+        _fake_document(
+            monkeypatch,
+            ["Figure 1: A caption without terminal punctuation", "Unrelated page text."],
         )
 
         assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
@@ -128,11 +213,13 @@ class TestExtractFigureCaptions:
     def test_stops_caption_before_numbered_section_heading(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(
+        _fake_document(
             monkeypatch,
-            "Figure 1: Caption without a final period\n"
-            "2.3 A New Section\n"
-            "Section text.",
+            [
+                "Figure 1: Caption without a final period\n"
+                "2.3 A New Section\n"
+                "Section text."
+            ],
         )
 
         assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
@@ -142,16 +229,39 @@ class TestExtractFigureCaptions:
     def test_retries_with_stricter_boundaries_when_numbers_skip(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(
+        _fake_document(
             monkeypatch,
-            "Figure 1: Caption without a final period\n"
-            "This body paragraph should not be included.\n"
-            "Figure 3: The next figure caption.\n",
+            [
+                "Figure 1: Caption without a final period\n"
+                "This body paragraph should not be included.\n"
+                "Figure 3: The next figure caption.\n"
+            ],
         )
 
         assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
             {"number": "1", "caption": "Caption without a final period"},
             {"number": "3", "caption": "The next figure caption."},
+        ]
+
+    def test_stops_caption_before_unlisted_bold_heading(self, tmp_path, monkeypatch):
+        """A caption that doesn't end in a full stop should still be cut
+        off by a following visually-distinguished heading, even if that
+        heading isn't in the regex whitelist."""
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        page = FakePage(
+            [
+                ("Figure 1: A caption without terminal punctuation", 10.0, False),
+                ("Ethical Statement", 10.0, True),
+                ("Some statement text.", 10.0, False),
+            ]
+        )
+        monkeypatch.setattr(
+            structure_extraction, "pymupdf", FakePyMuPDFModule([page])
+        )
+
+        assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "A caption without terminal punctuation"}
         ]
 
     def test_raises_for_missing_pdf(self, tmp_path):
@@ -163,7 +273,7 @@ class TestExtractTableCaptions:
     def test_extracts_table_captions(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(monkeypatch, SAMPLE_TEXT)
+        _fake_document(monkeypatch, [SAMPLE_TEXT])
 
         captions = structure_extraction.extract_table_captions(str(pdf_file))
 
@@ -174,11 +284,13 @@ class TestExtractTableCaptions:
     def test_retries_with_stricter_boundaries_when_numbers_skip(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(
+        _fake_document(
             monkeypatch,
-            "Table 1: Caption without a final period\n"
-            "This body paragraph should not be included.\n"
-            "Table 3: The next table caption.\n",
+            [
+                "Table 1: Caption without a final period\n"
+                "This body paragraph should not be included.\n"
+                "Table 3: The next table caption.\n"
+            ],
         )
 
         assert structure_extraction.extract_table_captions(str(pdf_file)) == [
@@ -195,7 +307,7 @@ class TestExtractDocumentStructure:
     def test_returns_all_structure_keys(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(monkeypatch, SAMPLE_TEXT)
+        _fake_document(monkeypatch, [SAMPLE_TEXT])
 
         structure = structure_extraction.extract_document_structure(str(pdf_file))
 
@@ -217,7 +329,7 @@ class TestExtractDocumentStructure:
     def test_returns_empty_lists_when_nothing_found(self, tmp_path, monkeypatch):
         pdf_file = tmp_path / "paper.pdf"
         pdf_file.write_bytes(b"pdf")
-        _fake_reader(monkeypatch, "Just some plain body text with no structure.")
+        _fake_document(monkeypatch, ["Just some plain body text with no structure."])
 
         structure = structure_extraction.extract_document_structure(str(pdf_file))
 

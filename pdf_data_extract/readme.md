@@ -22,15 +22,30 @@ empty list.
 
 ## Structure extraction
 
+Text is extracted with [PyMuPDF](https://pymupdf.readthedocs.io/) (`pymupdf`)
+rather than plain string extraction. PyMuPDF reconstructs text line-by-line
+from the PDF's layout instead of just concatenating characters in
+content-stream order, which is notably more reliable for multi-column
+academic layouts, and it exposes each line's font size and boldness. That
+layout information is used as a second detection signal alongside the regex
+heuristics below: a line that doesn't match the known regex vocabulary (for
+example a non-standard or non-English section name) is still recognised as a
+heading if it is visually distinguished from the body text (larger and/or
+bold font). The regex heuristics remain the primary signal, so behaviour for
+PDFs where every line shares the same font size/weight is unchanged.
+
 - `extract_section_headings(pdf_path)` returns a list of dictionaries, each
   with a `number` (e.g. `"2.1"`, or `None` when unnumbered) and a `heading`
-  string, for both numbered headings and common named sections (Abstract,
-  Introduction, Methods, Results, Discussion, Conclusion, References, etc.).
+  string, for numbered headings, common named sections (Abstract,
+  Introduction, Methods, Results, Discussion, Conclusion, References, etc.),
+  and any other line that stands out from the body text by font size or
+  boldness (returned with `number: None`).
 - `extract_figure_captions(pdf_path)` returns a list of dictionaries, each
   with a `number` and `caption` string, for lines beginning with `Figure`/`Fig.`.
   Wrapped caption lines are joined; extraction stops at a blank line, a
-  sentence ending, or a page boundary. If extracted figure numbers are not
-  sequential, extraction retries with stricter caption boundaries.
+  sentence ending, a page boundary, or a visually-distinguished heading line.
+  If extracted figure numbers are not sequential, extraction retries with
+  stricter caption boundaries.
 - `extract_table_captions(pdf_path)` returns a list of dictionaries, each with
   a `number` and `caption` string, for lines beginning with `Table`. Captions
   spanning multiple lines are joined using the same boundaries as figure
@@ -40,3 +55,16 @@ empty list.
   `table_captions` keys.
 
 PDFs without any recognizable headings or captions return empty lists.
+
+### Considered alternatives
+
+Dedicated scholarly-PDF parsers such as [GROBID](https://github.com/kermitt2/grobid)
+or AllenAI's `pdffigures2`/`doc2json` generally produce more accurate results
+than any regex-based approach, since they use models trained specifically on
+academic papers. They were not adopted here because they require running a
+separate Java service (typically via Docker), which adds deployment
+complexity beyond a plain `pip install`. PyMuPDF was chosen as a pure-Python,
+dependency-light middle ground that still meaningfully improves on plain-text
+regex matching by exploiting real layout signals. If extraction accuracy
+remains insufficient, GROBID is worth revisiting as a heavier, more accurate
+alternative.
