@@ -1,6 +1,10 @@
-from PyPDF2 import PdfReader
+import logging
 import re
 from datetime import datetime, timedelta
+
+import pymupdf
+
+logger = logging.getLogger(__name__)
 
 
 def process_authors(authors):
@@ -47,30 +51,30 @@ def process_date(date_str):
                 formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M:%S')
                 return formatted_date
         except ValueError:
-            print(f"Date parsing error for {date_str}")
+            logger.warning("Date parsing error for %s", date_str)
     return None
 
 
 def extract_metadata(pdf_path):
     """ Extract metadata from a PDF file."""
     metadata = {}
-    
+
     try:
-        with open(pdf_path, 'rb') as f:
-            reader = PdfReader(f)
-            doc_info = reader.metadata
-            metadata['Title'] = doc_info.title if doc_info.title else None
-            metadata['Author'] = doc_info.author if doc_info.author else None
-            metadata['Subject'] = doc_info.subject if doc_info.subject else None
-            metadata['Creator'] = doc_info.creator if doc_info.creator else None
-            metadata['Producer'] = doc_info.producer if doc_info.producer else None
-            metadata['CreationDate'] = doc_info['/CreationDate'] if '/CreationDate' in doc_info else None
-            metadata['ModDate'] = doc_info['/ModDate'] if '/ModDate' in doc_info else None
-            metadata['Keywords'] = doc_info['/Keywords'] if '/Keywords' in doc_info else None
-            metadata['Trapped'] = doc_info['/Trapped'] if '/Trapped' in doc_info else None
-            metadata['NumberOfPages'] = len(reader.pages)
+        with pymupdf.open(pdf_path) as document:
+            info = document.metadata or {}
+            metadata['Title'] = info.get('title') or None
+            metadata['Author'] = info.get('author') or None
+            metadata['Subject'] = info.get('subject') or None
+            metadata['Creator'] = info.get('creator') or None
+            metadata['Producer'] = info.get('producer') or None
+            metadata['CreationDate'] = info.get('creationDate') or None
+            metadata['ModDate'] = info.get('modDate') or None
+            metadata['Keywords'] = info.get('keywords') or None
+            trapped = info.get('trapped')
+            metadata['Trapped'] = trapped if trapped not in (None, '') else None
+            metadata['NumberOfPages'] = document.page_count
     except Exception as e:
-        print(f"Error extracting metadata from {pdf_path}: {e}")
+        logger.warning("Error extracting metadata from %s: %s", pdf_path, e)
 
     metadata['Author'] = process_authors(metadata.get('Author'))
     metadata['CreationDate'] = process_date(metadata.get('CreationDate'))
