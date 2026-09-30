@@ -29,11 +29,12 @@ empty list.
 - `extract_figure_captions(pdf_path)` returns a list of dictionaries, each
   with a `number` and `caption` string, for lines beginning with `Figure`/`Fig.`.
   Wrapped caption lines are joined; extraction stops at a blank line, a
-  sentence ending, or a page boundary.
+  sentence ending, or a page boundary. If extracted figure numbers are not
+  sequential, extraction retries with stricter caption boundaries.
 - `extract_table_captions(pdf_path)` returns a list of dictionaries, each with
   a `number` and `caption` string, for lines beginning with `Table`. Captions
   spanning multiple lines are joined using the same boundaries as figure
-  captions.
+  captions, including the sequential-number check and stricter retry.
 - `extract_document_structure(pdf_path)` combines the three functions above
   into a single dictionary with `section_headings`, `figure_captions`, and
   `table_captions` keys.

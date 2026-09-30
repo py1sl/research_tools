@@ -139,6 +139,21 @@ class TestExtractFigureCaptions:
             {"number": "1", "caption": "Caption without a final period"}
         ]
 
+    def test_retries_with_stricter_boundaries_when_numbers_skip(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        _fake_reader(
+            monkeypatch,
+            "Figure 1: Caption without a final period\n"
+            "This body paragraph should not be included.\n"
+            "Figure 3: The next figure caption.\n",
+        )
+
+        assert structure_extraction.extract_figure_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "Caption without a final period"},
+            {"number": "3", "caption": "The next figure caption."},
+        ]
+
     def test_raises_for_missing_pdf(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             structure_extraction.extract_figure_captions(str(tmp_path / "missing.pdf"))
@@ -154,6 +169,21 @@ class TestExtractTableCaptions:
 
         assert captions == [
             {"number": "1", "caption": "Summary of results for the experiments."},
+        ]
+
+    def test_retries_with_stricter_boundaries_when_numbers_skip(self, tmp_path, monkeypatch):
+        pdf_file = tmp_path / "paper.pdf"
+        pdf_file.write_bytes(b"pdf")
+        _fake_reader(
+            monkeypatch,
+            "Table 1: Caption without a final period\n"
+            "This body paragraph should not be included.\n"
+            "Table 3: The next table caption.\n",
+        )
+
+        assert structure_extraction.extract_table_captions(str(pdf_file)) == [
+            {"number": "1", "caption": "Caption without a final period"},
+            {"number": "3", "caption": "The next table caption."},
         ]
 
     def test_raises_for_missing_pdf(self, tmp_path):
