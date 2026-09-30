@@ -71,7 +71,7 @@ def _is_heading_line(line):
     )
 
 
-def _extract_captions(lines, pattern, number_key, text_key):
+def _extract_captions(lines, pattern, number_key, text_key, strict=False):
     captions = []
     current = None
 
@@ -95,6 +95,9 @@ def _extract_captions(lines, pattern, number_key, text_key):
             if not stripped or _is_heading_line(line):
                 save_current()
                 current = None
+            elif strict and current["parts"] and stripped[0].isupper():
+                save_current()
+                current = None
             else:
                 current["parts"].append(stripped)
                 if _ends_sentence(stripped):
@@ -103,6 +106,29 @@ def _extract_captions(lines, pattern, number_key, text_key):
 
     save_current()
     return captions
+
+
+def _numbers_are_sequential(captions, number_key):
+    numbers = [caption[number_key].split(".") for caption in captions]
+    for previous, current in zip(numbers, numbers[1:]):
+        if len(previous) == len(current) and previous[:-1] == current[:-1]:
+            if int(current[-1]) == int(previous[-1]) + 1:
+                continue
+        if (
+            len(previous) == len(current)
+            and int(current[0]) == int(previous[0]) + 1
+            and all(part == "1" for part in current[1:])
+        ):
+            continue
+        return False
+    return True
+
+
+def _extract_validated_captions(lines, pattern, number_key, text_key):
+    captions = _extract_captions(lines, pattern, number_key, text_key)
+    if _numbers_are_sequential(captions, number_key):
+        return captions
+    return _extract_captions(lines, pattern, number_key, text_key, strict=True)
 
 
 def _section_headings_from_lines(lines):
@@ -158,7 +184,9 @@ def extract_figure_captions(pdf_path):
         and its ``caption`` text, in the order they appear in the document.
     """
     text = _get_pdf_text(pdf_path)
-    return _extract_captions(text.splitlines(), _FIGURE_CAPTION, "number", "caption")
+    return _extract_validated_captions(
+        text.splitlines(), _FIGURE_CAPTION, "number", "caption"
+    )
 
 
 def extract_table_captions(pdf_path):
@@ -172,7 +200,9 @@ def extract_table_captions(pdf_path):
         and its ``caption`` text, in the order they appear in the document.
     """
     text = _get_pdf_text(pdf_path)
-    return _extract_captions(text.splitlines(), _TABLE_CAPTION, "number", "caption")
+    return _extract_validated_captions(
+        text.splitlines(), _TABLE_CAPTION, "number", "caption"
+    )
 
 
 def extract_document_structure(pdf_path):
@@ -191,6 +221,10 @@ def extract_document_structure(pdf_path):
 
     return {
         "section_headings": _section_headings_from_lines(lines),
-        "figure_captions": _extract_captions(lines, _FIGURE_CAPTION, "number", "caption"),
-        "table_captions": _extract_captions(lines, _TABLE_CAPTION, "number", "caption"),
+        "figure_captions": _extract_validated_captions(
+            lines, _FIGURE_CAPTION, "number", "caption"
+        ),
+        "table_captions": _extract_validated_captions(
+            lines, _TABLE_CAPTION, "number", "caption"
+        ),
     }
