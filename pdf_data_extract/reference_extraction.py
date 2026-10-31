@@ -2,6 +2,8 @@ import re
 
 import pymupdf
 
+from .reference_parsing import parse_references
+
 
 _REFERENCE_HEADING = re.compile(
     r"^\s*(?:\d+(?:\.\d+)*\s+)?"
@@ -164,7 +166,7 @@ def _strip_page_furniture(pages):
     return cleaned
 
 
-def extract_references(pdf_path):
+def extract_references(pdf_path, parse_fields=False):
     """Extract citation records from a PDF's references or bibliography section.
 
     Each returned record contains the normalized citation ``text`` and its
@@ -172,7 +174,9 @@ def extract_references(pdf_path):
     ``year`` (``None`` when absent). Numbered, blank-line separated and
     unnumbered author-first references are supported; page text is read in
     reading order, running headers/footers are removed and hyphenated line
-    breaks are repaired.
+    breaks are repaired. With ``parse_fields=True`` each record also gets
+    ``authors``, ``title``, ``journal``, ``volume`` and ``pages`` (see
+    :func:`pdf_data_extract.reference_parsing.parse_reference`).
     """
     try:
         document = pymupdf.open(pdf_path)
@@ -184,4 +188,7 @@ def extract_references(pdf_path):
     finally:
         document.close()
 
-    return _extract_reference_section("\n".join(_strip_page_furniture(pages)))
+    references = _extract_reference_section(
+        "\n".join(_strip_page_furniture(pages))
+    )
+    return parse_references(references) if parse_fields else references

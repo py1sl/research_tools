@@ -37,6 +37,11 @@ headers/footers are removed, hyphenated line breaks are repaired, and the last
 References heading is used; PDFs without a recognized section return an
 empty list.
 
+Pass `parse_fields=True` (or call `parse_references(records)`) to also get
+`authors` (list), `title`, `journal`, `volume` and `pages`; `parse_reference(text)`
+parses a single citation string. Parsing is heuristic (physics/ACS and
+author-year styles); fields it cannot determine are `None`.
+
 ## Structure extraction
 
 Text is extracted with [PyMuPDF](https://pymupdf.readthedocs.io/) (`pymupdf`)
