@@ -3,6 +3,8 @@ from .pdf_data_processing import (
     process_papers_folder,
     process_pdf_data,
 )
+from .reference_extraction import extract_references
+from .reference_parsing import parse_reference, parse_references
 from .structure_extraction import (
     extract_document_structure,
     extract_figure_captions,
@@ -12,6 +14,9 @@ from .structure_extraction import (
 from .table_extraction import extract_tables, extract_tables_with_captions
 
 __all__ = [
+    "extract_references",
+    "parse_reference",
+    "parse_references",
     "pdf_extract_data",
     "process_pdf_data",
     "process_papers_folder",

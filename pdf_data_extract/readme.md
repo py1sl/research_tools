@@ -29,10 +29,18 @@ an empty/`None`-filled dictionary is returned rather than raised.
 
 `extract_references(pdf_path)` returns a list of dictionaries from a PDF's
 References, Bibliography, Works Cited, or Literature Cited section. Each
-dictionary contains the normalized citation as `text` and the detected DOI as
-`doi` (`None` when no DOI is present). Numbered citations and blank-line
-separated citations are supported; PDFs without a recognized section return an
+dictionary contains the normalized citation as `text`, a 1-based `index`, and
+the detected `doi`, `arxiv_id`, `url` and `year` (`None` when absent).
+Numbered, blank-line separated and unnumbered author-first citations are
+supported. Text is read in reading order (multi-column aware), running
+headers/footers are removed, hyphenated line breaks are repaired, and the last
+References heading is used; PDFs without a recognized section return an
 empty list.
+
+Pass `parse_fields=True` (or call `parse_references(records)`) to also get
+`authors` (list), `title`, `journal`, `volume` and `pages`; `parse_reference(text)`
+parses a single citation string. Parsing is heuristic (physics/ACS and
+author-year styles); fields it cannot determine are `None`.
 
 ## Structure extraction
 
